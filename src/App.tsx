@@ -24,12 +24,15 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/solucoes" element={<Solucoes />} />
-          <Route path="/solucoes/controle-entregas" element={<ControleEntregas />} />
-          <Route path="/solucoes/controle-entregas/configuracoes" element={<Configuracoes />} />
-          <Route path="/solucoes/controle-entregas/clientes" element={<Clientes />} />
-          <Route path="/solucoes/controle-entregas/vistorias" element={<Vistorias />} />
-          <Route path="/solucoes/controle-entregas/recusas" element={<Recusas />} />
-          <Route path="/solucoes/controle-entregas/dashboard" element={<DashboardPage />} />
+          {/* Nested routes: ControleEntregas renders SidebarLayout + <Outlet /> */}
+          <Route path="/solucoes/controle-entregas" element={<ControleEntregas />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="configuracoes" element={<Configuracoes />} />
+            <Route path="clientes" element={<Clientes />} />
+            <Route path="vistorias" element={<Vistorias />} />
+            <Route path="recusas" element={<Recusas />} />
+          </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -8,7 +8,9 @@ import type {
   EligibleClient, Timeline
 } from "@/types/api";
 
-const API_BASE = localStorage.getItem("api_base_url") || "https://sua-api.com";
+const API_BASE = import.meta.env.VITE_API_BASE_URL as string;
+const SUPABASE_AUTH_URL = import.meta.env.VITE_SUPABASE_AUTH_URL as string;
+const SUPABASE_APIKEY = import.meta.env.VITE_SUPABASE_APIKEY as string;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem("auth_token");
@@ -20,14 +22,37 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       ...options?.headers,
     },
   });
-  if (!res.ok) throw new Error(`API Error: ${res.status}`);
+  if (res.status === 401) {
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("user_email");
+    window.location.href = "/";
+    throw new Error("Sessão expirada");
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`API Error ${res.status}: ${body}`);
+  }
   if (res.status === 204) return {} as T;
   return res.json();
 }
 
 export const api = {
   auth: {
-    login: (data: LoginDto) => request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(data) }),
+    login: async (data: LoginDto): Promise<AuthResponse> => {
+      const res = await fetch(SUPABASE_AUTH_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_APIKEY,
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error_description || error.msg || "Falha na autenticação");
+      }
+      return res.json();
+    },
   },
   users: {
     list: () => request<User[]>("/users"),

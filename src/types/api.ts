@@ -6,6 +6,14 @@ export interface LoginDto {
 
 export interface AuthResponse {
   access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token: string;
+  user: {
+    id: string;
+    email: string;
+    user_metadata?: Record<string, unknown>;
+  };
 }
 
 // Users

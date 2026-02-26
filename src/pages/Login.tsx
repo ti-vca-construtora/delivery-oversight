@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -17,14 +18,18 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Mock login - replace with api.auth.login() when connected
-    setTimeout(() => {
-      localStorage.setItem("auth_token", "mock_token");
-      localStorage.setItem("user_name", "Carlos Administrador");
+    try {
+      const response = await api.auth.login({ email, password });
+      localStorage.setItem("auth_token", response.access_token);
+      localStorage.setItem("user_email", response.user.email);
       toast({ title: "Login realizado com sucesso!" });
       navigate("/solucoes");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast({ title: "Erro no login", description: message, variant: "destructive" });
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   return (
