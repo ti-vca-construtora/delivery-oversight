@@ -2,8 +2,15 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/Login";
+import Solucoes from "./pages/Solucoes";
+import ControleEntregas from "./pages/ControleEntregas";
+import Configuracoes from "./pages/Configuracoes";
+import Clientes from "./pages/Clientes";
+import Vistorias from "./pages/Vistorias";
+import Recusas from "./pages/Recusas";
+import DashboardPage from "./pages/DashboardPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -15,8 +22,14 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/" element={<Login />} />
+          <Route path="/solucoes" element={<Solucoes />} />
+          <Route path="/solucoes/controle-entregas" element={<ControleEntregas />} />
+          <Route path="/solucoes/controle-entregas/configuracoes" element={<Configuracoes />} />
+          <Route path="/solucoes/controle-entregas/clientes" element={<Clientes />} />
+          <Route path="/solucoes/controle-entregas/vistorias" element={<Vistorias />} />
+          <Route path="/solucoes/controle-entregas/recusas" element={<Recusas />} />
+          <Route path="/solucoes/controle-entregas/dashboard" element={<DashboardPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
