@@ -23,7 +23,7 @@ const Login = () => {
       localStorage.setItem("auth_token", response.access_token);
       localStorage.setItem("user_email", response.user.email);
       toast({ title: "Login realizado com sucesso!" });
-      navigate("/solucoes");
+      navigate("/controle-entregas");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erro desconhecido";
       toast({ title: "Erro no login", description: message, variant: "destructive" });
@@ -61,7 +61,7 @@ const Login = () => {
             <Building2 className="w-10 h-10 text-primary-foreground" />
           </div>
           <h1 className="text-4xl font-bold text-primary-foreground mb-4">
-            Controle de Entregas
+            Entregas - VCA
           </h1>
           <p className="text-primary-foreground/70 text-lg max-w-md">
             Sistema integrado de gestão de vistorias, agendamentos e entregas de empreendimentos
@@ -81,7 +81,7 @@ const Login = () => {
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl gradient-primary shadow-glow">
               <Building2 className="w-6 h-6 text-primary-foreground" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">Controle de Entregas</h1>
+            <h1 className="text-2xl font-bold text-foreground">Entregas - VCA</h1>
           </div>
 
           <h2 className="text-3xl font-bold text-foreground mb-2">Bem-vindo de volta</h2>

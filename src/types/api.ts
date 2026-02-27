@@ -94,6 +94,7 @@ export interface Overview {
   situation: "ATIVO" | "INATIVO";
   status_recente: "ACEITE" | "AGUARDANDO" | "CANCELADA" | "RECUSA";
   status_quality: string | null;
+  status_construction: string | null;
   status_delivery: string | null;
   data_register: string | null;
   data_contact: string | null;
@@ -107,8 +108,10 @@ export interface UpdateOverviewDto {
   status_construction?: string;
   status_delivery?: string;
   status?: "PENDENTE" | "EM ANDAMENTO" | "LIBERADA";
-  obs?: string;
   situation?: "ATIVO" | "INATIVO";
+  data_register?: string | null;
+  data_contact?: string | null;
+  obs?: string;
 }
 
 // Inspections
@@ -148,6 +151,7 @@ export interface CreateInspectionDto {
 
 export interface UpdateInspectionDto {
   status?: string;
+  datetime?: string;
   inspector?: string;
   obs?: string;
   mobuss?: boolean;
@@ -163,6 +167,9 @@ export interface Rejection {
   created_at: string;
   updated_at: string | null;
   obs: string | null;
+  idclient: number | null;
+  identerprise: number | null;
+  nameenterprise: string | null;
 }
 
 export interface UpdateRejectionDto {

@@ -1,312 +1,287 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { Search, Pencil, Trash2, Loader2, AlertTriangle, CalendarClock } from "lucide-react";
+import { Search, Loader2, Eye, Edit2, X, ChevronLeft, ChevronRight, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
-import type { Rejection, UpdateRejectionDto, EligibleClient } from "@/types/api";
+import type { Rejection, UpdateRejectionDto, Inspection, Client } from "@/types/api";
 
+/* ═══ Helpers ═══ */
 const statusColors: Record<string, string> = {
-  PENDENTE: "bg-warning/10 text-warning border-warning/20",
-  RESOLVIDA: "bg-success/10 text-success border-success/20",
-  CANCELADA: "bg-muted text-muted-foreground border-border",
+  AGUARDANDO: "bg-muted text-muted-foreground border-border",
+  "CONCLUÍDO": "bg-success/10 text-success border-success/20",
 };
+const StatusBadge = ({ status }: { status: string }) => (
+  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border leading-none ${statusColors[status] || "bg-muted text-muted-foreground border-border"}`}>
+    {status}
+  </span>
+);
 
 const constructionStatusColors: Record<string, string> = {
-  PENDENTE: "bg-warning/10 text-warning border-warning/20",
-  "EM ANDAMENTO": "bg-info/10 text-info border-info/20",
-  CONCLUIDA: "bg-success/10 text-success border-success/20",
+  PENDENTE: "bg-muted text-muted-foreground border-border",
+  "EM ANDAMENTO": "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
+  "CONCLUÍDA": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  "CONCLUÍDO": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  "CONCLUIDO": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
 };
-
-const StatusBadge = ({ status, variant }: { status: string; variant?: "construction" }) => {
-  const colors = variant === "construction" ? constructionStatusColors : statusColors;
+const ConstructionStatusBadge = ({ status }: { status: string }) => {
+  const normalized = status.toUpperCase().trim();
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${colors[status] || "bg-muted text-muted-foreground border-border"}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border leading-none ${constructionStatusColors[normalized] || "bg-muted text-muted-foreground border-border"}`}>
       {status}
     </span>
   );
 };
 
+const formatDateBR = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+
+const PAGE_SIZES = [10, 20, 50];
+const STATUSES = ["AGUARDANDO", "CONCLUÍDO"];
+const STATUSES_OBRA = ["PENDENTE", "EM ANDAMENTO", "CONCLUÍDA"];
+
 const Recusas = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // ─── Queries ───
-  const { data: rejections = [], isLoading: loadingRejections } = useQuery({
-    queryKey: ["rejections"],
-    queryFn: () => api.rejections.list(),
-  });
-  const { data: inspections = [] } = useQuery({
-    queryKey: ["inspections"],
-    queryFn: () => api.inspections.list(),
-  });
-  const { data: clients = [] } = useQuery({
-    queryKey: ["clients"],
-    queryFn: () => api.clients.list(),
-  });
-  const { data: eligible = [] } = useQuery({
-    queryKey: ["eligible"],
-    queryFn: () => api.eligible.list(),
-  });
+  /* ═══ Queries ═══ */
+  const { data: rejections = [], isLoading } = useQuery({ queryKey: ["rejections"], queryFn: () => api.rejections.list() });
+  const { data: inspections = [] } = useQuery({ queryKey: ["inspections"], queryFn: () => api.inspections.list() });
+  const { data: clients = [] } = useQuery({ queryKey: ["clients"], queryFn: () => api.clients.list() });
+  const { data: enterprises = [] } = useQuery({ queryKey: ["enterprises"], queryFn: () => api.enterprises.list() });
 
-  // ─── State ───
+  /* ═══ State ═══ */
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterConstruction, setFilterConstruction] = useState<string>("all");
-  const [editOpen, setEditOpen] = useState(false);
-  const [editingRejection, setEditingRejection] = useState<Rejection | null>(null);
-  const [editForm, setEditForm] = useState<UpdateRejectionDto>({});
+  const [filterStatus, setFilterStatus] = useState("AGUARDANDO");
+  const [filterEnterprise, setFilterEnterprise] = useState("all");
+  const [entOpen, setEntOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  // ─── Mutations ───
+  // Dialog
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedRej, setSelectedRej] = useState<Rejection | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<UpdateRejectionDto>({});
+
+  /* ═══ Mutations ═══ */
   const updateMut = useMutation({
     mutationFn: ({ id, data }: { id: number; data: UpdateRejectionDto }) => api.rejections.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["rejections"] });
-      queryClient.invalidateQueries({ queryKey: ["eligible"] });
-      queryClient.invalidateQueries({ queryKey: ["overviews"] });
-      setEditOpen(false);
-      setEditingRejection(null);
-      toast({ title: "Recusa atualizada!" });
-    },
-    onError: (err: Error) => toast({ title: "Erro ao atualizar recusa", description: err.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["rejections"] }); setIsEditing(false); setDetailsOpen(false); toast({ title: "Recusa atualizada!" }); },
+    onError: (err: Error) => toast({ title: "Erro ao atualizar", description: err.message, variant: "destructive" }),
   });
 
-  const deleteMut = useMutation({
-    mutationFn: (id: number) => api.rejections.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["rejections"] });
-      queryClient.invalidateQueries({ queryKey: ["eligible"] });
-      queryClient.invalidateQueries({ queryKey: ["overviews"] });
-      toast({ title: "Recusa removida" });
-    },
-    onError: (err: Error) => toast({ title: "Erro ao remover recusa", description: err.message, variant: "destructive" }),
-  });
+  /* ═══ Helpers ═══ */
+  const getInspection = (idinspection: number) => inspections.find((i) => i.id === idinspection);
+  const getClient = (idclient: number) => clients.find((c) => c.id === idclient);
 
-  // ─── Computed ───
-  const enriched = useMemo(() => {
-    return rejections.map((rej) => {
-      const inspection = inspections.find((i) => i.id === rej.idinspection);
-      const client = inspection ? clients.find((c) => c.id === inspection.idclient) : undefined;
-      return { ...rej, inspection, client };
-    });
-  }, [rejections, inspections, clients]);
+  const getClientFromRej = (rej: Rejection) => {
+    const insp = getInspection(rej.idinspection);
+    return insp ? getClient(insp.idclient) : undefined;
+  };
 
+  const getInspDatetime = (rej: Rejection) => {
+    const insp = getInspection(rej.idinspection);
+    return insp?.datetime || null;
+  };
+
+  /* ═══ Computed ═══ */
   const filtered = useMemo(() => {
-    return enriched.filter((r) => {
-      const matchSearch = r.client?.name.toLowerCase().includes(search.toLowerCase()) || r.obs?.toLowerCase().includes(search.toLowerCase());
+    return rejections.filter((r) => {
       const matchStatus = filterStatus === "all" || r.status === filterStatus;
-      const matchConstruction = filterConstruction === "all" || r.construction_status === filterConstruction;
-      return matchSearch && matchStatus && matchConstruction;
+      const client = getClientFromRej(r);
+      const matchSearch = !search || (client && (
+        client.name.toLowerCase().includes(search.toLowerCase()) ||
+        client.unit.toLowerCase().includes(search.toLowerCase())
+      ));
+      const matchEnterprise = filterEnterprise === "all" || String(r.identerprise) === filterEnterprise;
+      return matchStatus && matchSearch && matchEnterprise;
     });
-  }, [enriched, search, filterStatus, filterConstruction]);
+  }, [rejections, inspections, clients, search, filterStatus, filterEnterprise]);
 
-  // Summary counters
-  const summary = useMemo(() => {
-    const total = rejections.length;
-    const pending = rejections.filter((r) => r.status === "PENDENTE").length;
-    const resolved = rejections.filter((r) => r.status === "RESOLVIDA").length;
-    const overdue = rejections.filter((r) => r.prevision_date && new Date(r.prevision_date) < new Date() && r.status === "PENDENTE").length;
-    return { total, pending, resolved, overdue };
-  }, [rejections]);
+  const selectedEntName = filterEnterprise === "all" ? "Todos os empreendimentos" : enterprises.find((e) => String(e.id) === filterEnterprise)?.name || "";
 
-  const eligibleAgain: EligibleClient[] = useMemo(() => eligible.filter((e) => e.type === "again"), [eligible]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  // ─── Handlers ───
-  const openEdit = (rej: Rejection) => {
-    setEditingRejection(rej);
-    setEditForm({
-      status: rej.status,
-      construction_status: rej.construction_status,
-      prevision_date: rej.prevision_date || "",
-      obs: rej.obs || "",
-    });
-    setEditOpen(true);
+  /* ═══ Handlers ═══ */
+  const openDetails = (rej: Rejection) => {
+    setSelectedRej(rej);
+    setEditData({ prevision_date: rej.prevision_date || undefined, construction_status: rej.construction_status, status: rej.status, obs: rej.obs || undefined });
+    setIsEditing(false);
+    setDetailsOpen(true);
   };
 
-  const handleUpdate = () => {
-    if (!editingRejection) return;
-    updateMut.mutate({ id: editingRejection.id, data: editForm });
+  const handleSave = () => {
+    if (!selectedRej) return;
+    updateMut.mutate({ id: selectedRej.id, data: editData });
   };
 
-  if (loadingRejections) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <span className="ml-3 text-muted-foreground">Carregando recusas...</span>
-      </div>
-    );
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /><span className="ml-3 text-muted-foreground">Carregando recusas...</span></div>;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Recusas</h1>
-        <p className="text-sm text-muted-foreground">Gestão de recusas de vistoria e acompanhamento de obras</p>
+        <p className="text-sm text-muted-foreground">{filtered.length} recusas {filterStatus !== "all" ? `com status ${filterStatus}` : ""}</p>
       </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Total", value: summary.total, color: "text-foreground" },
-          { label: "Pendentes", value: summary.pending, color: "text-warning" },
-          { label: "Resolvidas", value: summary.resolved, color: "text-success" },
-          { label: "Atrasadas", value: summary.overdue, color: "text-destructive" },
-        ].map((card) => (
-          <motion.div key={card.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-xl border border-border p-4">
-            <p className="text-sm text-muted-foreground">{card.label}</p>
-            <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Eligible again alert */}
-      {eligibleAgain.length > 0 && (
-        <Alert variant="default" className="border-info/30 bg-info/5">
-          <CalendarClock className="w-4 h-4 text-info" />
-          <AlertTitle className="text-info">Clientes aptos para reagendamento</AlertTitle>
-          <AlertDescription className="text-sm">
-            {eligibleAgain.length} cliente(s) com obra concluída podem ser reagendados.
-            Acesse a página <span className="font-semibold">Vistorias</span> → <span className="font-semibold">Aptos</span> para agendar.
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Buscar por cliente ou observação..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          <Input placeholder="Buscar cliente..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="pl-10 h-8 text-sm" />
         </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
+        <Popover open={entOpen} onOpenChange={setEntOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="w-[220px] justify-start h-8 text-sm font-normal">
+              <Building2 className="w-3.5 h-3.5 mr-2 text-muted-foreground flex-shrink-0" />
+              <span className="truncate">{selectedEntName}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[260px] p-0" align="start">
+            <Command><CommandInput placeholder="Buscar empreendimento..." /><CommandList><CommandEmpty>Nenhum encontrado</CommandEmpty><CommandGroup>
+              <CommandItem value="__all__" onSelect={() => { setFilterEnterprise("all"); setEntOpen(false); setPage(1); }}>Todos os empreendimentos</CommandItem>
+              {enterprises.map((e) => <CommandItem key={e.id} value={e.name} onSelect={() => { setFilterEnterprise(String(e.id)); setEntOpen(false); setPage(1); }}>{e.name}</CommandItem>)}
+            </CommandGroup></CommandList></Command>
+          </PopoverContent>
+        </Popover>
+        <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setPage(1); }}>
+          <SelectTrigger className="w-[160px] h-8 text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos Status</SelectItem>
-            <SelectItem value="PENDENTE">Pendente</SelectItem>
-            <SelectItem value="RESOLVIDA">Resolvida</SelectItem>
-            <SelectItem value="CANCELADA">Cancelada</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterConstruction} onValueChange={setFilterConstruction}>
-          <SelectTrigger className="w-[170px]">
-            <SelectValue placeholder="Status Obra" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas Obras</SelectItem>
-            <SelectItem value="PENDENTE">Pendente</SelectItem>
-            <SelectItem value="EM ANDAMENTO">Em Andamento</SelectItem>
-            <SelectItem value="CONCLUIDA">Concluída</SelectItem>
+            <SelectItem value="all">Todos</SelectItem>
+            {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
 
       {/* Table */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/50">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Cliente</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase hidden sm:table-cell">Data Vistoria</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase hidden md:table-cell">Previsão Obra</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Status Obra</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase hidden lg:table-cell">Obs</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Ações</th>
+                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground uppercase">Cliente</th>
+                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground uppercase hidden md:table-cell">Empreendimento</th>
+                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground uppercase hidden md:table-cell">Data Vistoria</th>
+                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground uppercase hidden md:table-cell">Previsão Obra</th>
+                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground uppercase hidden lg:table-cell">Status Obra</th>
+                <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted-foreground uppercase">Status</th>
+                <th className="text-right px-3 py-2 text-[11px] font-semibold text-muted-foreground uppercase w-[80px]">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((rej) => {
-                const isOverdue = rej.prevision_date && new Date(rej.prevision_date) < new Date() && rej.status === "PENDENTE";
+              {paginated.map((rej) => {
+                const client = getClientFromRej(rej);
+                const inspDate = getInspDatetime(rej);
                 return (
-                  <tr key={rej.id} className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors ${isOverdue ? "bg-destructive/5" : ""}`}>
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-foreground">{rej.client?.name || "—"}</span>
-                      <span className="text-muted-foreground text-xs ml-2">{rej.client?.unit}</span>
-                      {isOverdue && <AlertTriangle className="inline-block ml-2 w-4 h-4 text-destructive" />}
+                  <tr key={rej.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-3 py-1.5">
+                      <p className="text-sm font-medium leading-tight">{client?.name || "—"}</p>
+                      <p className="text-[11px] text-muted-foreground leading-tight">{client?.unit || ""}</p>
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell whitespace-nowrap">
-                      {rej.inspection ? new Date(rej.inspection.datetime).toLocaleDateString("pt-BR") : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell whitespace-nowrap">
-                      {rej.prevision_date ? new Date(rej.prevision_date).toLocaleDateString("pt-BR") : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={rej.construction_status} variant="construction" />
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={rej.status} />
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground max-w-[180px] truncate hidden lg:table-cell">{rej.obs || "—"}</td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(rej)}>
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="hover:text-destructive" onClick={() => deleteMut.mutate(rej.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                    <td className="px-3 py-1.5 text-sm text-muted-foreground hidden md:table-cell">{rej.nameenterprise || "—"}</td>
+                    <td className="px-3 py-1.5 text-sm text-muted-foreground hidden md:table-cell">{formatDateBR(inspDate)}</td>
+                    <td className="px-3 py-1.5 text-sm text-muted-foreground hidden md:table-cell">{formatDateBR(rej.prevision_date)}</td>
+                    <td className="px-3 py-1.5 text-sm text-muted-foreground hidden lg:table-cell">{rej.construction_status ? <ConstructionStatusBadge status={rej.construction_status} /> : "—"}</td>
+                    <td className="px-3 py-1.5"><StatusBadge status={rej.status} /></td>
+                    <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => openDetails(rej)}><Eye className="w-3.5 h-3.5" /> Ver detalhes</Button>
                     </td>
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Nenhuma recusa encontrada</td>
-                </tr>
+              {paginated.length === 0 && (
+                <tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">Nenhuma recusa encontrada</td></tr>
               )}
             </tbody>
           </table>
         </div>
-      </motion.div>
 
-      {/* Edit Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar Recusa #{editingRejection?.id}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Status</Label>
-              <Select value={editForm.status || ""} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PENDENTE">Pendente</SelectItem>
-                  <SelectItem value="RESOLVIDA">Resolvida</SelectItem>
-                  <SelectItem value="CANCELADA">Cancelada</SelectItem>
-                </SelectContent>
+        {/* Pagination */}
+        {filtered.length > 0 && (
+          <div className="flex items-center justify-between px-3 py-2 border-t border-border bg-muted/30">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Linhas por página:</span>
+              <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                <SelectTrigger className="h-7 w-[60px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>{PAGE_SIZES.map((s) => <SelectItem key={s} value={String(s)}>{s}</SelectItem>)}</SelectContent>
               </Select>
+              <span>{((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, filtered.length)} de {filtered.length}</span>
             </div>
-            <div>
-              <Label>Status da Obra</Label>
-              <Select value={editForm.construction_status || ""} onValueChange={(v) => setEditForm({ ...editForm, construction_status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PENDENTE">Pendente</SelectItem>
-                  <SelectItem value="EM ANDAMENTO">Em Andamento</SelectItem>
-                  <SelectItem value="CONCLUIDA">Concluída</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft className="w-4 h-4" /></Button>
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                const p = totalPages <= 5 ? i + 1 : page <= 3 ? i + 1 : page >= totalPages - 2 ? totalPages - 4 + i : page - 2 + i;
+                return <Button key={p} variant={p === page ? "default" : "ghost"} size="icon" className="h-7 w-7 text-xs" onClick={() => setPage(p)}>{p}</Button>;
+              })}
+              <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight className="w-4 h-4" /></Button>
             </div>
-            <div>
-              <Label>Previsão de Conclusão</Label>
-              <Input type="date" value={editForm.prevision_date || ""} onChange={(e) => setEditForm({ ...editForm, prevision_date: e.target.value })} />
-            </div>
-            <div>
-              <Label>Observações</Label>
-              <Input value={editForm.obs || ""} onChange={(e) => setEditForm({ ...editForm, obs: e.target.value })} placeholder="Observações sobre a recusa/obra" />
-            </div>
-            <Button className="w-full" onClick={handleUpdate} disabled={updateMut.isPending}>
-              {updateMut.isPending ? "Salvando..." : "Salvar Alterações"}
-            </Button>
           </div>
+        )}
+      </div>
+
+      {/* ═══ Details / Edit Dialog ═══ */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span>Detalhes da Recusa</span>
+              <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" title={isEditing ? "Fechar edição" : "Editar"} onClick={() => setIsEditing((e) => !e)}>
+                {isEditing ? <X className="w-3.5 h-3.5" /> : <Edit2 className="w-3.5 h-3.5" />}
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+          {selectedRej && (() => {
+            const client = getClientFromRej(selectedRej);
+            const inspDate = getInspDatetime(selectedRej);
+            return (
+              <div className="space-y-4">
+                {/* Client info */}
+                <div className="p-2 rounded-lg bg-muted/40 border border-border">
+                  <p className="text-sm font-medium">{client?.name}</p>
+                  <p className="text-xs text-muted-foreground">{client?.unit}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-muted-foreground text-xs">Data Vistoria</span><p>{formatDateBR(inspDate)}</p></div>
+                  <div><span className="text-muted-foreground text-xs">Criada em</span><p>{formatDateBR(selectedRej.created_at)}</p></div>
+                </div>
+
+                {/* Always-visible fields — disabled when not editing */}
+                <div className="space-y-3">
+                  <div><Label className="text-xs">Status</Label>
+                    <Select value={editData.status} disabled={!isEditing} onValueChange={(v) => setEditData({ ...editData, status: v })}>
+                      <SelectTrigger className={`h-8 text-sm ${isEditing ? 'bg-card border-input shadow-sm' : ''}`} disabled={!isEditing}><SelectValue /></SelectTrigger>
+                      <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label className="text-xs">Status Obra</Label>
+                    <Select value={editData.construction_status || ""} disabled={!isEditing} onValueChange={(v) => setEditData({ ...editData, construction_status: v })}>
+                      <SelectTrigger className={`h-8 text-sm ${isEditing ? 'bg-card border-input shadow-sm' : ''}`} disabled={!isEditing}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>{STATUSES_OBRA.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label className="text-xs">Previsão Data</Label><Input type="date" className={`h-8 text-sm ${isEditing ? 'bg-card border-input shadow-sm' : ''}`} disabled={!isEditing} value={editData.prevision_date?.split("T")[0] || ""} onChange={(e) => setEditData({ ...editData, prevision_date: e.target.value })} /></div>
+                  <div><Label className="text-xs">Observações</Label><Textarea rows={3} className={`text-sm ${isEditing ? 'bg-card border-input shadow-sm' : ''}`} disabled={!isEditing} value={editData.obs || ""} onChange={(e) => setEditData({ ...editData, obs: e.target.value })} /></div>
+                  {isEditing && (
+                    <div className="flex gap-2">
+                      <Button className="flex-1" size="sm" onClick={handleSave} disabled={updateMut.isPending}>{updateMut.isPending ? "Salvando..." : "Salvar"}</Button>
+                      <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancelar</Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

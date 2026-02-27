@@ -11,12 +11,11 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
-  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const BASE = "/solucoes/controle-entregas";
+const BASE = "/controle-entregas";
 
 const navItems = [
   { label: "Dashboard", icon: BarChart3, to: `${BASE}/dashboard` },
@@ -58,8 +57,8 @@ const SidebarLayout = ({ children }: SidebarLayoutProps) => {
                 exit={{ opacity: 0, width: 0 }}
                 className="overflow-hidden whitespace-nowrap"
               >
-                <p className="text-sm font-bold text-sidebar-foreground leading-tight">Controle Geral</p>
-                <p className="text-xs text-sidebar-foreground/50">de Entregas</p>
+                <p className="text-sm font-bold text-sidebar-foreground leading-tight">Entregas</p>
+                <p className="text-xs text-sidebar-foreground/50">VCA</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -101,16 +100,6 @@ const SidebarLayout = ({ children }: SidebarLayoutProps) => {
 
       {/* Footer */}
       <div className="p-3 border-t border-sidebar-border space-y-2">
-        <button
-          onClick={() => navigate("/solucoes")}
-          className={cn(
-            "flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
-          )}
-        >
-          <ArrowLeft className="w-4 h-4 flex-shrink-0" />
-          {!collapsed && <span className="whitespace-nowrap">Voltar às Soluções</span>}
-        </button>
-
         <div className={cn("flex items-center gap-3 px-3 py-2", collapsed && "justify-center")}>
           <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center flex-shrink-0">
             <span className="text-xs font-bold text-sidebar-foreground">
@@ -190,7 +179,7 @@ const SidebarLayout = ({ children }: SidebarLayoutProps) => {
             <div className="w-7 h-7 rounded-md gradient-primary flex items-center justify-center">
               <Building2 className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm font-bold text-foreground">Controle de Entregas</span>
+            <span className="text-sm font-bold text-foreground">Entregas - VCA</span>
           </div>
         </header>
 

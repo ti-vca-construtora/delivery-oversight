@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
-import Solucoes from "./pages/Solucoes";
 import ControleEntregas from "./pages/ControleEntregas";
 import Configuracoes from "./pages/Configuracoes";
 import Clientes from "./pages/Clientes";
@@ -23,9 +22,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
-          <Route path="/solucoes" element={<Solucoes />} />
-          {/* Nested routes: ControleEntregas renders SidebarLayout + <Outlet /> */}
-          <Route path="/solucoes/controle-entregas" element={<ControleEntregas />}>
+          <Route path="/controle-entregas" element={<ControleEntregas />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="configuracoes" element={<Configuracoes />} />
@@ -33,6 +30,8 @@ const App = () => (
             <Route path="vistorias" element={<Vistorias />} />
             <Route path="recusas" element={<Recusas />} />
           </Route>
+          {/* Redirect old paths */}
+          <Route path="/solucoes/controle-entregas/*" element={<Navigate to="/controle-entregas" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
