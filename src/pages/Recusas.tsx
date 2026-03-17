@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, Loader2, Eye, Edit2, X, ChevronLeft, ChevronRight, Building2 } from "lucide-react";
+import { Search, Loader2, Eye, Edit2, X, Trash2, ChevronLeft, ChevronRight, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -68,6 +69,7 @@ const Recusas = () => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedRej, setSelectedRej] = useState<Rejection | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [editData, setEditData] = useState<UpdateRejectionDto>({});
 
   /* ═══ Mutations ═══ */
@@ -75,6 +77,18 @@ const Recusas = () => {
     mutationFn: ({ id, data }: { id: number; data: UpdateRejectionDto }) => api.rejections.update(id, data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["rejections"] }); setIsEditing(false); setDetailsOpen(false); toast({ title: "Recusa atualizada!" }); },
     onError: (err: Error) => toast({ title: "Erro ao atualizar", description: err.message, variant: "destructive" }),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => api.rejections.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rejections"] });
+      setDeleteConfirmOpen(false);
+      setIsEditing(false);
+      setDetailsOpen(false);
+      setSelectedRej(null);
+      toast({ title: "Recusa removida" });
+    },
+    onError: (err: Error) => toast({ title: "Erro ao excluir recusa", description: err.message, variant: "destructive" }),
   });
 
   /* ═══ Helpers ═══ */
@@ -121,6 +135,11 @@ const Recusas = () => {
   const handleSave = () => {
     if (!selectedRej) return;
     updateMut.mutate({ id: selectedRej.id, data: editData });
+  };
+
+  const handleDelete = () => {
+    if (!selectedRej) return;
+    deleteMut.mutate(selectedRej.id);
   };
 
   if (isLoading) {
@@ -239,6 +258,15 @@ const Recusas = () => {
               <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" title={isEditing ? "Fechar edição" : "Editar"} onClick={() => setIsEditing((e) => !e)}>
                 {isEditing ? <X className="w-3.5 h-3.5" /> : <Edit2 className="w-3.5 h-3.5" />}
               </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 ml-3 text-destructive hover:text-destructive"
+                title="Excluir recusa"
+                onClick={() => setDeleteConfirmOpen(true)}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
             </DialogTitle>
           </DialogHeader>
           {selectedRej && (() => {
@@ -284,6 +312,21 @@ const Recusas = () => {
           })()}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir esta recusa? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleteMut.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

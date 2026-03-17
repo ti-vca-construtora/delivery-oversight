@@ -496,6 +496,18 @@ const Clientes = () => {
               <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" title={isEditing ? "Fechar edição" : "Editar"} onClick={() => setIsEditing((e) => !e)}>
                 {isEditing ? <X className="w-3.5 h-3.5" /> : <Edit2 className="w-3.5 h-3.5" />}
               </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 ml-3 text-destructive hover:text-destructive"
+                title="Excluir cliente"
+                onClick={() => {
+                  const client = detailsOverview ? getClient(detailsOverview) : null;
+                  if (client) confirmDelete(client.id);
+                }}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
             </DialogTitle>
           </DialogHeader>
           {detailsOverview && (() => {
@@ -547,10 +559,6 @@ const Clientes = () => {
                       <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancelar</Button>
                     </div>
                   )}
-                  <hr className="border-border" />
-                  <Button variant="destructive" size="sm" className="w-full" onClick={() => { const cl = getClient(detailsOverview); if (cl) confirmDelete(cl.id); }}>
-                    <Trash2 className="w-3.5 h-3.5 mr-2" /> Excluir Cliente
-                  </Button>
                 </div>
               </div>
             );
